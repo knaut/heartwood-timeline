@@ -1,9 +1,10 @@
 'use client';
 
-import { useMemo, useRef } from 'react';
+import { useMemo, useRef, useEffect, useState } from 'react';
 import { arc } from 'd3-shape';
 import type { SkillData, NormalizedYear, NormalizedSkillArc } from './types';
 import { normalizeSkillData, getSkillColor } from './data';
+import { Legend } from './Legend';
 import styles from './HeartWoodTimeline.module.css';
 
 // ============================================================================
@@ -39,6 +40,7 @@ type HeartWoodTimelineProps = {
   tiltFactor?: number;
   perspective?: number;
   opacityCurve?: number;
+  dimmedOpacity?: number;
 };
 
 // ============================================================================
@@ -53,12 +55,29 @@ export function HeartWoodTimeline({
   tiltFactor = 1.0,
   perspective = 1200,
   opacityCurve = 0.35,
+  dimmedOpacity = 0.1,
 }: HeartWoodTimelineProps) {
+  // Hover state for interactive legend
+  const [hoveredSkill, setHoveredSkill] = useState<string | null>(null);
+
   // Normalize data once when props change
   const normalizedData = useMemo(
     () => normalizeSkillData(data, skillOrder),
     [data, skillOrder]
   );
+
+  // Compute canonical skill order for legend (same order as rings)
+  const canonicalSkillOrder = useMemo(() => {
+    if (!skillOrder || skillOrder.length === 0) {
+      // Fallback: extract unique skills and sort alphabetically
+      const allSkills = new Set<string>();
+      Object.values(data).forEach((yearEntries) => {
+        yearEntries.forEach((entry) => allSkills.add(entry.skill));
+      });
+      return Array.from(allSkills).sort((a, b) => a.localeCompare(b));
+    }
+    return skillOrder;
+  }, [data, skillOrder]);
 
   // Ref for tilt control
   const stackRef = useRef<HTMLDivElement>(null);
@@ -84,7 +103,9 @@ export function HeartWoodTimeline({
   const totalYears = normalizedData.length;
 
   // Mouse move handler for perspective tilt
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handleMouseMove = (e: MouseEvent) => {
+    // Skip tilt if user prefers reduced motion
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     if (!stackRef.current) return;
 
     const rect = stackRef.current.getBoundingClientRect();
@@ -111,34 +132,50 @@ export function HeartWoodTimeline({
     stackRef.current.style.setProperty('--tilt-y', '0deg');
   };
 
-  return (
-    <div className={styles.perspectiveWrapper} style={{ perspective: `${perspective}px` }}>
-      <div
-        ref={stackRef}
-        className={styles.stackContainer}
-        onMouseMove={handleMouseMove}
-        onMouseLeave={handleMouseLeave}
-        style={{ width: maxSvgSize, height: maxSvgSize }}
-      >
-        {normalizedData.map((yearData, index) => {
-          const yearOffset = mostRecentIndex - index;
-          const translateZ = -yearOffset * (maxZDepth / (totalYears - 1 || 1));
-          const opacity = opacityFloor + (1 - opacityFloor) * Math.exp(-opacityCurve * yearOffset);
+  // Hoist mousemove listener to window to prevent jitter when cursor moves fast
+  useEffect(() => {
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+    };
+  }, [tiltFactor]); // Re-attach when tiltFactor changes
 
-          return (
-            <YearChart
-              key={yearData.year}
-              yearData={yearData}
-              svgSize={maxSvgSize}
-              style={{
-                transform: `translateZ(${translateZ}px)`,
-                opacity,
-              }}
-            />
-          );
-        })}
+  return (
+    <>
+      <Legend
+        skills={canonicalSkillOrder}
+        hoveredSkill={hoveredSkill}
+        onHoverSkill={setHoveredSkill}
+      />
+      <div className={styles.perspectiveWrapper} style={{ perspective: `${perspective}px` }}>
+        <div
+          ref={stackRef}
+          className={styles.stackContainer}
+          onMouseLeave={handleMouseLeave}
+          style={{ width: maxSvgSize, height: maxSvgSize }}
+        >
+          {normalizedData.map((yearData, index) => {
+            const yearOffset = mostRecentIndex - index;
+            const translateZ = -yearOffset * (maxZDepth / (totalYears - 1 || 1));
+            const opacity = opacityFloor + (1 - opacityFloor) * Math.exp(-opacityCurve * yearOffset);
+
+            return (
+              <YearChart
+                key={yearData.year}
+                yearData={yearData}
+                svgSize={maxSvgSize}
+                hoveredSkill={hoveredSkill}
+                dimmedOpacity={dimmedOpacity}
+                style={{
+                  transform: `translateZ(${translateZ}px)`,
+                  opacity,
+                }}
+              />
+            );
+          })}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -149,10 +186,12 @@ export function HeartWoodTimeline({
 type YearChartProps = {
   yearData: NormalizedYear;
   svgSize: number;
+  hoveredSkill: string | null;
+  dimmedOpacity: number;
   style?: React.CSSProperties;
 };
 
-function YearChart({ yearData, svgSize, style }: YearChartProps) {
+function YearChart({ yearData, svgSize, hoveredSkill, dimmedOpacity, style }: YearChartProps) {
   return (
     <div className={styles.yearLayer} style={style}>
       <h2 className={styles.yearLabel}>{yearData.year}</h2>
@@ -164,9 +203,21 @@ function YearChart({ yearData, svgSize, style }: YearChartProps) {
       >
         {/* Center the visualization */}
         <g transform={`translate(${svgSize / 2}, ${svgSize / 2})`}>
-          {yearData.arcs.map((arcData) => (
-            <SkillArc key={`${arcData.skill}-${arcData.segmentIndex}`} arcData={arcData} />
-          ))}
+          {yearData.arcs.map((arcData) => {
+            // Compute per-arc opacity based on hover state
+            let arcOpacity: number | undefined;
+            if (hoveredSkill !== null) {
+              arcOpacity = arcData.skill === hoveredSkill ? 1 : dimmedOpacity;
+            }
+
+            return (
+              <SkillArc
+                key={`${arcData.skill}-${arcData.segmentIndex}`}
+                arcData={arcData}
+                opacity={arcOpacity}
+              />
+            );
+          })}
         </g>
       </svg>
     </div>
@@ -179,9 +230,10 @@ function YearChart({ yearData, svgSize, style }: YearChartProps) {
 
 type SkillArcProps = {
   arcData: NormalizedSkillArc;
+  opacity?: number;
 };
 
-function SkillArc({ arcData }: SkillArcProps) {
+function SkillArc({ arcData, opacity }: SkillArcProps) {
   // Calculate radii based on ring index
   const innerRadius = BASE_RADIUS + arcData.ringIndex * (RING_WIDTH + RING_GAP);
   const outerRadius = innerRadius + RING_WIDTH;
@@ -206,6 +258,7 @@ function SkillArc({ arcData }: SkillArcProps) {
       fill={fillColor}
       className={styles.arc}
       data-skill={arcData.skill}
+      opacity={opacity}
     />
   );
 }

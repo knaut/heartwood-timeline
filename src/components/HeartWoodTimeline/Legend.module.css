@@ -1,0 +1,44 @@
+/* ─── Legend Container ───────────────────────────────────────── */
+
+.legend {
+  position: fixed;
+  top: 0;
+  left: 0;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  z-index: 100;
+}
+
+/* ─── Legend Item ────────────────────────────────────────────── */
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.legendItem:hover {
+  opacity: 1;
+}
+
+.icon {
+  display: block;
+  flex-shrink: 0;
+}
+
+.skillName {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  user-select: none;
+}
+
+/* ─── Hover State ────────────────────────────────────────────── */
+
+.legendItem.hovered .skillName {
+  font-weight: 600;
+}

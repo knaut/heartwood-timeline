@@ -16,6 +16,16 @@ const skillOrder = [
 ]
 
 const exampleData: SkillData = {
+  '2026': [
+    { skill: 'CSS', duration: [0, 4] },
+    { skill: 'HTML', duration: [0, 4] },
+    { skill: 'Javascript', duration: [0, 4] },
+    { skill: 'NodeJS', duration: [0, 4] },
+    { skill: 'React', duration: [0, 4] },
+    { skill: 'Storybook', duration: [0, 4] },
+    { skill: 'TypeScript', duration: [0, 4] },
+    { skill: 'AI/Agentic', duration: [0, 4] },
+  ],
   '2025': [
     { skill: 'CSS', duration: [0, 12] },
     { skill: 'HTML', duration: [0, 12] },
