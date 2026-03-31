@@ -73,7 +73,15 @@ export default function Home() {
     <main className={styles.main}>
       <h1 className={styles.heading}>Heartwood Timeline</h1>
       <div className={styles.timelineContainer}>
-        <HeartWoodTimeline data={exampleData} skillOrder={skillOrder} />
+        <HeartWoodTimeline
+          data={exampleData}
+          skillOrder={skillOrder} 
+          opacityFloor={0.1}
+          maxZDepth={120}
+          tiltFactor={3}
+          perspective={800}
+          opacityCurve={0.8}
+        />
       </div>
     </main>
   );

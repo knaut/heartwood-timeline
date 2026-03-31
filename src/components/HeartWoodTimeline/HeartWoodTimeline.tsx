@@ -36,6 +36,9 @@ type HeartWoodTimelineProps = {
   skillOrder?: string[];
   opacityFloor?: number;
   maxZDepth?: number;
+  tiltFactor?: number;
+  perspective?: number;
+  opacityCurve?: number;
 };
 
 // ============================================================================
@@ -47,6 +50,9 @@ export function HeartWoodTimeline({
   skillOrder,
   opacityFloor = 0.5,
   maxZDepth = 60,
+  tiltFactor = 1.0,
+  perspective = 1200,
+  opacityCurve = 0.35,
 }: HeartWoodTimelineProps) {
   // Normalize data once when props change
   const normalizedData = useMemo(
@@ -90,8 +96,8 @@ export function HeartWoodTimeline({
     const normalizedY = (e.clientY - centerY) / (rect.height / 2);
 
     // Calculate tilt angles
-    const tiltX = -normalizedY * 8;
-    const tiltY = normalizedX * 8;
+    const tiltX = -normalizedY * 8 * tiltFactor;
+    const tiltY = normalizedX * 8 * tiltFactor;
 
     // Apply tilt via CSS custom properties
     stackRef.current.style.setProperty('--tilt-x', `${tiltX}deg`);
@@ -106,7 +112,7 @@ export function HeartWoodTimeline({
   };
 
   return (
-    <div className={styles.perspectiveWrapper}>
+    <div className={styles.perspectiveWrapper} style={{ perspective: `${perspective}px` }}>
       <div
         ref={stackRef}
         className={styles.stackContainer}
@@ -117,7 +123,7 @@ export function HeartWoodTimeline({
         {normalizedData.map((yearData, index) => {
           const yearOffset = mostRecentIndex - index;
           const translateZ = -yearOffset * (maxZDepth / (totalYears - 1 || 1));
-          const opacity = Math.max(opacityFloor, 1 - yearOffset * 0.12);
+          const opacity = opacityFloor + (1 - opacityFloor) * Math.exp(-opacityCurve * yearOffset);
 
           return (
             <YearChart
