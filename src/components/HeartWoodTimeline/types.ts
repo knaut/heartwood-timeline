@@ -10,14 +10,34 @@
 // ============================================================================
 
 /**
+ * A single duration range: [startMonth, endMonth].
+ *
+ * Month indices where 0 = January start, 12 = December end.
+ * Example: [7, 12] means August through December.
+ */
+export type DurationRange = [startMonth: number, endMonth: number];
+
+/**
+ * Duration can be a single range or multiple disjoint ranges.
+ *
+ * Single range: [0, 12] — skill used all year
+ * Multiple ranges: [[0, 4], [6, 8]] — skill used Jan-Apr and Jul-Aug
+ *
+ * Type guard functions are provided to distinguish these at runtime:
+ * - isSingleDuration()
+ * - isMultiDuration()
+ */
+export type Duration = DurationRange | DurationRange[];
+
+/**
  * A single skill entry as provided in the raw prop data.
  *
  * @property skill - The skill name (e.g., "React", "TypeScript")
- * @property duration - Tuple of [startMonth, endMonth] where 0 = Jan, 12 = Dec
+ * @property duration - Single range or array of ranges for disjoint usage periods
  */
 export type SkillEntry = {
   skill: string;
-  duration: [startMonth: number, endMonth: number];
+  duration: Duration;
 };
 
 /**
@@ -29,6 +49,33 @@ export type SkillEntry = {
 export type SkillData = {
   [year: string]: SkillEntry[];
 };
+
+// ============================================================================
+// Type Guards
+// ============================================================================
+
+/**
+ * Type guard: is this duration a single range [number, number]?
+ *
+ * Distinguishes [0, 12] from [[0, 4], [6, 8]].
+ * A single range has exactly 2 elements, both numbers.
+ */
+export function isSingleDuration(duration: Duration): duration is DurationRange {
+  return (
+    duration.length === 2 &&
+    typeof duration[0] === 'number' &&
+    typeof duration[1] === 'number'
+  );
+}
+
+/**
+ * Type guard: is this duration multiple ranges?
+ *
+ * If not a single duration, it must be an array of ranges.
+ */
+export function isMultiDuration(duration: Duration): duration is DurationRange[] {
+  return !isSingleDuration(duration);
+}
 
 // ============================================================================
 // Internal Normalized Types
@@ -45,6 +92,11 @@ export type SkillData = {
  * - PI/2 radians = 3 o'clock (month 3 / April)
  * - PI radians = 6 o'clock (month 6 / July)
  * - 3*PI/2 radians = 9 o'clock (month 9 / October)
+ *
+ * MULTI-RANGE NOTE: A skill with disjoint usage periods produces multiple
+ * NormalizedSkillArc entries. They share the same skill name and ringIndex
+ * (same radial band, same color) but have different angles. Use segmentIndex
+ * to distinguish them for React keys.
  */
 export type NormalizedSkillArc = {
   /** The skill name, used for color lookup and accessibility labels */
@@ -56,11 +108,19 @@ export type NormalizedSkillArc = {
   /** End angle in radians (0 = top, clockwise) */
   endAngle: number;
 
-  /** Original duration tuple, retained for tooltip/label display */
-  duration: [startMonth: number, endMonth: number];
+  /** Original duration range for this segment (for tooltip/label display) */
+  duration: DurationRange;
 
   /** Ring index within the year (0 = innermost ring) */
   ringIndex: number;
+
+  /**
+   * Segment index for multi-range skills.
+   *
+   * 0 = first (or only) segment, 1 = second segment, etc.
+   * Used to generate unique React keys: `${skill}-${segmentIndex}`
+   */
+  segmentIndex: number;
 };
 
 /**
@@ -73,7 +133,13 @@ export type NormalizedYear = {
   /** The year as a number for sorting/comparison */
   yearNumeric: number;
 
-  /** Skill arcs for this year, sorted alphabetically by skill name */
+  /**
+   * Skill arcs for this year.
+   *
+   * Sorted alphabetically by skill name. Multiple arcs for the same skill
+   * (multi-range durations) are grouped together, each with incrementing
+   * segmentIndex but the same ringIndex.
+   */
   arcs: NormalizedSkillArc[];
 };
 
@@ -85,6 +151,10 @@ export type NormalizedYear = {
  * - Ordered iteration (years render in chronological sequence)
  * - D3 data binding (arrays map naturally to selections)
  * - Stable ring ordering (skills sorted alphabetically within each year)
+ *
+ * NOTE: Years are sorted ascending (oldest first). For the stacked Z-depth
+ * layout, the rendering layer must reverse this or apply z-index in
+ * descending year order (most recent on top).
  */
 export type NormalizedSkillData = NormalizedYear[];
 

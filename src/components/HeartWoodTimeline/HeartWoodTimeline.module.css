@@ -1,17 +1,26 @@
-/* ─── Container Layout ──────────────────────────────────────── */
+/* ─── 3D Stacked Layout ─────────────────────────────────────── */
 
-.container {
+.perspectiveWrapper {
+  perspective: 1200px;
+  perspective-origin: 50% 50%;
   display: flex;
-  flex-direction: row;
-  gap: var(--space-6);
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: flex-start;
+  justify-content: center;
+  align-items: center;
 }
 
-/* ─── Year Container ────────────────────────────────────────── */
+.stackContainer {
+  transform-style: preserve-3d;
+  transform: rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg));
+  transition: transform 0.1s ease-out;
+  position: relative;
+}
 
-.yearContainer {
+/* ─── Year Layer ────────────────────────────────────────────── */
+
+.yearLayer {
+  position: absolute;
+  top: 0;
+  left: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
