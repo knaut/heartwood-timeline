@@ -43,9 +43,7 @@ next-env.d.ts
 # agents
 AGENTS.md
 CLAUDE.md
-PLAN.md
-REPORT.md
-SPEC.md
 /PLANS
 /REPORTS
 /SPECS
+/PROJECT_LOGS

@@ -41,6 +41,8 @@ type HeartWoodTimelineProps = {
   perspective?: number;
   opacityCurve?: number;
   dimmedOpacity?: number;
+  tiltBoundary?: number;
+  tiltFreezeRefs?: React.RefObject<Element>[];
 };
 
 // ============================================================================
@@ -56,6 +58,8 @@ export function HeartWoodTimeline({
   perspective = 1200,
   opacityCurve = 0.35,
   dimmedOpacity = 0.1,
+  tiltBoundary = 100,
+  tiltFreezeRefs = [],
 }: HeartWoodTimelineProps) {
   // Hover state for interactive legend
   const [hoveredSkill, setHoveredSkill] = useState<string | null>(null);
@@ -108,6 +112,12 @@ export function HeartWoodTimeline({
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     if (!stackRef.current) return;
 
+    // Check if cursor is over any freeze zone element
+    const isOverFreezeZone = tiltFreezeRefs.some(
+      (ref) => ref.current && ref.current.contains(e.target as Node)
+    );
+    if (isOverFreezeZone) return;
+
     const rect = stackRef.current.getBoundingClientRect();
     const centerX = rect.left + rect.width / 2;
     const centerY = rect.top + rect.height / 2;
@@ -120,9 +130,17 @@ export function HeartWoodTimeline({
     const tiltX = -normalizedY * 8 * tiltFactor;
     const tiltY = normalizedX * 8 * tiltFactor;
 
-    // Apply tilt via CSS custom properties
-    stackRef.current.style.setProperty('--tilt-x', `${tiltX}deg`);
-    stackRef.current.style.setProperty('--tilt-y', `${tiltY}deg`);
+    // Check viewport boundaries per-axis and freeze selectively
+    const nearLeftOrRight = e.clientX < tiltBoundary || e.clientX > window.innerWidth - tiltBoundary;
+    const nearTopOrBottom = e.clientY < tiltBoundary || e.clientY > window.innerHeight - tiltBoundary;
+
+    // Apply tilt via CSS custom properties, skipping axes near boundaries
+    if (!nearTopOrBottom) {
+      stackRef.current.style.setProperty('--tilt-x', `${tiltX}deg`);
+    }
+    if (!nearLeftOrRight) {
+      stackRef.current.style.setProperty('--tilt-y', `${tiltY}deg`);
+    }
   };
 
   // Mouse leave handler to reset tilt
@@ -138,7 +156,7 @@ export function HeartWoodTimeline({
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
     };
-  }, [tiltFactor]); // Re-attach when tiltFactor changes
+  }, [tiltFactor, tiltBoundary, tiltFreezeRefs]); // Re-attach when tilt-related props change
 
   return (
     <>
