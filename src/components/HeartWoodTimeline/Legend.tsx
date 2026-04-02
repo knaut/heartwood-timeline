@@ -1,5 +1,6 @@
 'use client';
 
+import { forwardRef } from 'react';
 import Image from 'next/image';
 import styles from './Legend.module.css';
 
@@ -46,32 +47,34 @@ type LegendProps = {
 // Component
 // ============================================================================
 
-export function Legend({ skills, hoveredSkill, onHoverSkill }: LegendProps) {
-  return (
-    <div className={styles.legend} onMouseLeave={() => onHoverSkill(null)}>
-      {skills.map((skill) => {
-        const icon = SKILL_ICONS[skill];
-        const isHovered = hoveredSkill === skill;
+export const Legend = forwardRef<HTMLDivElement, LegendProps>(
+  function Legend({ skills, hoveredSkill, onHoverSkill }, ref) {
+    return (
+      <div ref={ref} className={styles.legend} onMouseLeave={() => onHoverSkill(null)}>
+        {skills.map((skill) => {
+          const icon = SKILL_ICONS[skill];
+          const isHovered = hoveredSkill === skill;
 
-        return (
-          <div
-            key={skill}
-            className={`${styles.legendItem} ${isHovered ? styles.hovered : ''}`}
-            onMouseEnter={() => onHoverSkill(skill)}
-          >
-            {icon && (
-              <Image
-                src={icon}
-                alt={`${skill} icon`}
-                width={16}
-                height={16}
-                className={styles.icon}
-              />
-            )}
-            <span className={styles.skillName}>{skill}</span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
+          return (
+            <div
+              key={skill}
+              className={`${styles.legendItem} ${isHovered ? styles.hovered : ''}`}
+              onMouseEnter={() => onHoverSkill(skill)}
+            >
+              {icon && (
+                <Image
+                  src={icon}
+                  alt={`${skill} icon`}
+                  width={16}
+                  height={16}
+                  className={styles.icon}
+                />
+              )}
+              <span className={styles.skillName}>{skill}</span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+);

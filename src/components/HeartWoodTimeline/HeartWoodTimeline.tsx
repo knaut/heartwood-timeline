@@ -86,6 +86,9 @@ export function HeartWoodTimeline({
   // Ref for tilt control
   const stackRef = useRef<HTMLDivElement>(null);
 
+  // Ref for legend freeze zone
+  const legendRef = useRef<HTMLDivElement>(null);
+
   // Calculate the largest SVG size needed across all years
   const maxSvgSize = useMemo(() => {
     let maxSize = 0;
@@ -113,7 +116,8 @@ export function HeartWoodTimeline({
     if (!stackRef.current) return;
 
     // Check if cursor is over any freeze zone element
-    const isOverFreezeZone = tiltFreezeRefs.some(
+    const allFreezeRefs = [legendRef, ...tiltFreezeRefs];
+    const isOverFreezeZone = allFreezeRefs.some(
       (ref) => ref.current && ref.current.contains(e.target as Node)
     );
     if (isOverFreezeZone) return;
@@ -161,6 +165,7 @@ export function HeartWoodTimeline({
   return (
     <>
       <Legend
+        ref={legendRef}
         skills={canonicalSkillOrder}
         hoveredSkill={hoveredSkill}
         onHoverSkill={setHoveredSkill}
