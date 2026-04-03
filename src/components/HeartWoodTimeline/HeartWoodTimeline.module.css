@@ -24,10 +24,10 @@
 
 .yearLabel {
   position: absolute;
-  top: 0;
-  left: 0;
+  top: 10%;
+  left: 10%;
   padding: 4px 8px;
-  font-size: 1.25rem;
+  font-size: 1.55rem;
   font-weight: 600;
   color: var(--color-text-primary);
   font-variant-numeric: tabular-nums;
