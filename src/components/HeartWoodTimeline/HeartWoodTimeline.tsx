@@ -1,287 +1,163 @@
-'use client';
+'use client'
 
-import { useMemo, useRef, useEffect, useState } from 'react';
-import { arc } from 'd3-shape';
-import type { SkillData, NormalizedYear, NormalizedSkillArc } from './types';
-import { normalizeSkillData, getSkillColor } from './data';
-import { Legend } from './Legend';
-import styles from './HeartWoodTimeline.module.css';
+import { useMemo, useRef, useEffect, useState } from 'react'
+import type { SkillData } from './types'
+import { normalizeSkillData } from './data'
+import { BASE_RADIUS, RING_WIDTH, RING_GAP } from './constants'
+import { Legend } from './Legend'
+import { YearChart } from './YearChart'
+import styles from './HeartWoodTimeline.module.css'
 
-// ============================================================================
-// Arc Geometry Constants
-// ============================================================================
-
-/**
- * Base radius for the innermost ring in pixels.
- * This creates breathing room from the center point.
- */
-const BASE_RADIUS = 40;
-
-/**
- * Width of each skill ring in pixels.
- */
-const RING_WIDTH = 20;
-
-/**
- * Gap between adjacent rings in pixels.
- * Creates visual separation between skills.
- */
-const RING_GAP = 12;
-
-// ============================================================================
-// Component Props
-// ============================================================================
+const { perspectiveWrapper, stackContainer } = styles
 
 type HeartWoodTimelineProps = {
-  data: SkillData;
-  skillOrder?: string[];
-  opacityFloor?: number;
-  maxZDepth?: number;
-  tiltFactor?: number;
-  perspective?: number;
-  opacityCurve?: number;
-  dimmedOpacity?: number;
-  tiltBoundary?: number;
-  tiltFreezeRefs?: React.RefObject<Element>[];
-};
-
-// ============================================================================
-// Component
-// ============================================================================
+	data: SkillData
+	skillOrder?: string[]
+	opacityFloor?: number
+	maxZDepth?: number
+	tiltFactor?: number
+	perspective?: number
+	opacityCurve?: number
+	dimmedOpacity?: number
+	tiltBoundary?: number
+	tiltFreezeRefs?: React.RefObject<Element>[]
+}
 
 export function HeartWoodTimeline({
-  data,
-  skillOrder,
-  opacityFloor = 0.5,
-  maxZDepth = 60,
-  tiltFactor = 1.0,
-  perspective = 1200,
-  opacityCurve = 0.35,
-  dimmedOpacity = 0.1,
-  tiltBoundary = 100,
-  tiltFreezeRefs = [],
+	data,
+	skillOrder,
+	opacityFloor = 0.5,
+	maxZDepth = 60,
+	tiltFactor = 1.0,
+	perspective = 1200,
+	opacityCurve = 0.35,
+	dimmedOpacity = 0.1,
+	tiltBoundary = 100,
+	tiltFreezeRefs = [],
 }: HeartWoodTimelineProps) {
-  // Hover state for interactive legend
-  const [hoveredSkill, setHoveredSkill] = useState<string | null>(null);
+	const [hoveredSkill, setHoveredSkill] = useState<string | null>(null)
 
-  // Normalize data once when props change
-  const normalizedData = useMemo(
-    () => normalizeSkillData(data, skillOrder),
-    [data, skillOrder]
-  );
+	const normalizedData = useMemo(
+		() => normalizeSkillData(data, skillOrder),
+		[data, skillOrder]
+	)
 
-  // Compute canonical skill order for legend (same order as rings)
-  const canonicalSkillOrder = useMemo(() => {
-    if (!skillOrder || skillOrder.length === 0) {
-      // Fallback: extract unique skills and sort alphabetically
-      const allSkills = new Set<string>();
-      Object.values(data).forEach((yearEntries) => {
-        yearEntries.forEach((entry) => allSkills.add(entry.skill));
-      });
-      return Array.from(allSkills).sort((a, b) => a.localeCompare(b));
-    }
-    return skillOrder;
-  }, [data, skillOrder]);
+	// compute canonical skill order for legend (same order as rings)
+	const canonicalSkillOrder = useMemo(() => {
+		if (!skillOrder || skillOrder.length === 0) {
+			// fallback: extract unique skills and sort alphabetically
+			const allSkills = new Set<string>()
+			Object.values(data).forEach((yearEntries) => {
+				yearEntries.forEach((entry) => allSkills.add(entry.skill))
+			})
+			return Array.from(allSkills).sort((a, b) => a.localeCompare(b))
+		}
+		return skillOrder
+	}, [data, skillOrder])
 
-  // Ref for tilt control
-  const stackRef = useRef<HTMLDivElement>(null);
+	const stackRef = useRef<HTMLDivElement>(null)
+	const legendRef = useRef<HTMLDivElement>(null)
 
-  // Ref for legend freeze zone
-  const legendRef = useRef<HTMLDivElement>(null);
+	// calculate the largest SVG size needed across all years
+	const maxSvgSize = useMemo(() => {
+		let maxSize = 0
+		normalizedData.forEach((yearData) => {
+			const numRings = yearData.arcs.length
+			const maxRadius = BASE_RADIUS + numRings * (RING_WIDTH + RING_GAP)
+			const svgSize = maxRadius * 2 + 20
+			if (svgSize > maxSize) {
+				maxSize = svgSize
+			}
+		})
+		return maxSize
+	}, [normalizedData])
 
-  // Calculate the largest SVG size needed across all years
-  const maxSvgSize = useMemo(() => {
-    let maxSize = 0;
-    normalizedData.forEach((yearData) => {
-      const numRings = yearData.arcs.length;
-      const maxRadius = BASE_RADIUS + numRings * (RING_WIDTH + RING_GAP);
-      const svgSize = maxRadius * 2 + 20;
-      if (svgSize > maxSize) {
-        maxSize = svgSize;
-      }
-    });
-    return maxSize;
-  }, [normalizedData]);
+	const mostRecentIndex = normalizedData.length - 1
+	const totalYears = normalizedData.length
 
-  // Most recent year index (highest year number is at the end of the sorted array)
-  const mostRecentIndex = normalizedData.length - 1;
+	const handleMouseMove = (e: MouseEvent) => {
+		if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+		if (!stackRef.current) return
 
-  // Total years for Z-depth calculation
-  const totalYears = normalizedData.length;
+		// check if cursor is over any freeze zone element
+		const allFreezeRefs = [legendRef, ...tiltFreezeRefs]
+		const isOverFreezeZone = allFreezeRefs.some(
+			(ref) => ref.current && ref.current.contains(e.target as Node)
+		)
+		if (isOverFreezeZone) return
 
-  // Mouse move handler for perspective tilt
-  const handleMouseMove = (e: MouseEvent) => {
-    // Skip tilt if user prefers reduced motion
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    if (!stackRef.current) return;
+		const rect = stackRef.current.getBoundingClientRect()
+		const centerX = rect.left + rect.width / 2
+		const centerY = rect.top + rect.height / 2
 
-    // Check if cursor is over any freeze zone element
-    const allFreezeRefs = [legendRef, ...tiltFreezeRefs];
-    const isOverFreezeZone = allFreezeRefs.some(
-      (ref) => ref.current && ref.current.contains(e.target as Node)
-    );
-    if (isOverFreezeZone) return;
+		const normalizedX = (e.clientX - centerX) / (rect.width / 2)
+		const normalizedY = (e.clientY - centerY) / (rect.height / 2)
 
-    const rect = stackRef.current.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
+		const tiltX = -normalizedY * 8 * tiltFactor
+		const tiltY = normalizedX * 8 * tiltFactor
 
-    // Normalized offset from center (-1 to 1)
-    const normalizedX = (e.clientX - centerX) / (rect.width / 2);
-    const normalizedY = (e.clientY - centerY) / (rect.height / 2);
+		// check viewport boundaries per-axis and freeze selectively
+		const nearLeftOrRight = e.clientX < tiltBoundary || e.clientX > window.innerWidth - tiltBoundary
+		const nearTopOrBottom = e.clientY < tiltBoundary || e.clientY > window.innerHeight - tiltBoundary
 
-    // Calculate tilt angles
-    const tiltX = -normalizedY * 8 * tiltFactor;
-    const tiltY = normalizedX * 8 * tiltFactor;
+		if (!nearTopOrBottom) {
+			stackRef.current.style.setProperty('--tilt-x', `${tiltX}deg`)
+		}
+		if (!nearLeftOrRight) {
+			stackRef.current.style.setProperty('--tilt-y', `${tiltY}deg`)
+		}
+	}
 
-    // Check viewport boundaries per-axis and freeze selectively
-    const nearLeftOrRight = e.clientX < tiltBoundary || e.clientX > window.innerWidth - tiltBoundary;
-    const nearTopOrBottom = e.clientY < tiltBoundary || e.clientY > window.innerHeight - tiltBoundary;
+	const handleMouseLeave = () => {
+		if (!stackRef.current) return
+		stackRef.current.style.setProperty('--tilt-x', '0deg')
+		stackRef.current.style.setProperty('--tilt-y', '0deg')
+	}
 
-    // Apply tilt via CSS custom properties, skipping axes near boundaries
-    if (!nearTopOrBottom) {
-      stackRef.current.style.setProperty('--tilt-x', `${tiltX}deg`);
-    }
-    if (!nearLeftOrRight) {
-      stackRef.current.style.setProperty('--tilt-y', `${tiltY}deg`);
-    }
-  };
+	// hoist mousemove listener to window to prevent jitter when cursor moves fast
+	useEffect(() => {
+		window.addEventListener('mousemove', handleMouseMove)
+		return () => {
+			window.removeEventListener('mousemove', handleMouseMove)
+		}
+	}, [tiltFactor, tiltBoundary, tiltFreezeRefs])
 
-  // Mouse leave handler to reset tilt
-  const handleMouseLeave = () => {
-    if (!stackRef.current) return;
-    stackRef.current.style.setProperty('--tilt-x', '0deg');
-    stackRef.current.style.setProperty('--tilt-y', '0deg');
-  };
+	return (
+		<>
+			<Legend
+				ref={legendRef}
+				skills={canonicalSkillOrder}
+				hoveredSkill={hoveredSkill}
+				onHoverSkill={setHoveredSkill}
+			/>
+			<div className={perspectiveWrapper} style={{ perspective: `${perspective}px` }}>
+				<div
+					ref={stackRef}
+					className={stackContainer}
+					onMouseLeave={handleMouseLeave}
+					style={{ width: maxSvgSize, height: maxSvgSize }}
+				>
+					{normalizedData.map((yearData, index) => {
+						const yearOffset = mostRecentIndex - index
+						const translateZ = -yearOffset * (maxZDepth / (totalYears - 1 || 1))
+						const opacity = opacityFloor + (1 - opacityFloor) * Math.exp(-opacityCurve * yearOffset)
 
-  // Hoist mousemove listener to window to prevent jitter when cursor moves fast
-  useEffect(() => {
-    window.addEventListener('mousemove', handleMouseMove);
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-    };
-  }, [tiltFactor, tiltBoundary, tiltFreezeRefs]); // Re-attach when tilt-related props change
-
-  return (
-    <>
-      <Legend
-        ref={legendRef}
-        skills={canonicalSkillOrder}
-        hoveredSkill={hoveredSkill}
-        onHoverSkill={setHoveredSkill}
-      />
-      <div className={styles.perspectiveWrapper} style={{ perspective: `${perspective}px` }}>
-        <div
-          ref={stackRef}
-          className={styles.stackContainer}
-          onMouseLeave={handleMouseLeave}
-          style={{ width: maxSvgSize, height: maxSvgSize }}
-        >
-          {normalizedData.map((yearData, index) => {
-            const yearOffset = mostRecentIndex - index;
-            const translateZ = -yearOffset * (maxZDepth / (totalYears - 1 || 1));
-            const opacity = opacityFloor + (1 - opacityFloor) * Math.exp(-opacityCurve * yearOffset);
-
-            return (
-              <YearChart
-                key={yearData.year}
-                yearData={yearData}
-                svgSize={maxSvgSize}
-                hoveredSkill={hoveredSkill}
-                dimmedOpacity={dimmedOpacity}
-                style={{
-                  transform: `translateZ(${translateZ}px)`,
-                  opacity,
-                }}
-              />
-            );
-          })}
-        </div>
-      </div>
-    </>
-  );
-}
-
-// ============================================================================
-// Year Chart Subcomponent
-// ============================================================================
-
-type YearChartProps = {
-  yearData: NormalizedYear;
-  svgSize: number;
-  hoveredSkill: string | null;
-  dimmedOpacity: number;
-  style?: React.CSSProperties;
-};
-
-function YearChart({ yearData, svgSize, hoveredSkill, dimmedOpacity, style }: YearChartProps) {
-  return (
-    <div className={styles.yearLayer} style={style}>
-      <h2 className={styles.yearLabel}>{yearData.year}</h2>
-      <svg
-        width={svgSize}
-        height={svgSize}
-        viewBox={`0 0 ${svgSize} ${svgSize}`}
-        className={styles.svg}
-      >
-        {/* Center the visualization */}
-        <g transform={`translate(${svgSize / 2}, ${svgSize / 2})`}>
-          {yearData.arcs.map((arcData) => {
-            // Compute per-arc opacity based on hover state
-            let arcOpacity: number | undefined;
-            if (hoveredSkill !== null) {
-              arcOpacity = arcData.skill === hoveredSkill ? 1 : dimmedOpacity;
-            }
-
-            return (
-              <SkillArc
-                key={`${arcData.skill}-${arcData.segmentIndex}`}
-                arcData={arcData}
-                opacity={arcOpacity}
-              />
-            );
-          })}
-        </g>
-      </svg>
-    </div>
-  );
-}
-
-// ============================================================================
-// Skill Arc Subcomponent
-// ============================================================================
-
-type SkillArcProps = {
-  arcData: NormalizedSkillArc;
-  opacity?: number;
-};
-
-function SkillArc({ arcData, opacity }: SkillArcProps) {
-  // Calculate radii based on ring index
-  const innerRadius = BASE_RADIUS + arcData.ringIndex * (RING_WIDTH + RING_GAP);
-  const outerRadius = innerRadius + RING_WIDTH;
-
-  // Create D3 arc generator
-  const arcGenerator = arc();
-
-  // Generate the path data
-  const pathData = arcGenerator({
-    innerRadius,
-    outerRadius,
-    startAngle: arcData.startAngle,
-    endAngle: arcData.endAngle,
-  });
-
-  // Get the color for this skill
-  const fillColor = getSkillColor(arcData.skill);
-
-  return (
-    <path
-      d={pathData || undefined}
-      fill={fillColor}
-      className={styles.arc}
-      data-skill={arcData.skill}
-      opacity={opacity}
-    />
-  );
+						return (
+							<YearChart
+								key={yearData.year}
+								yearData={yearData}
+								svgSize={maxSvgSize}
+								hoveredSkill={hoveredSkill}
+								dimmedOpacity={dimmedOpacity}
+								style={{
+									transform: `translateZ(${translateZ}px)`,
+									opacity,
+								}}
+							/>
+						)
+					})}
+				</div>
+			</div>
+		</>
+	)
 }
