@@ -15,3 +15,6 @@ Clone the repo, and then run `npm i` to install. `npm run dev` to run the local 
 You can also play with the configurable props, such as tilt factor and z-depth, on the [Storybook Deployment](https://knaut.github.io/heartwood-timeline/)
 
 <img width="1084" height="927" alt="Screenshot 2026-04-04 at 7 49 04 PM" src="https://github.com/user-attachments/assets/83dd787c-b355-4916-8155-66ff4369d885" />
+
+## License
+GPL
